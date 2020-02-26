@@ -11,7 +11,7 @@ from tensorflow.keras import datasets, layers, models, optimizers
 
 DATASET = 'COIL20.mat'
 PERCENTAGE_PRIVILEGED = 20
-PERCENTAGE_TRAIN = 0.3
+PERCENTAGE_TEST = 0.3
 
 
 def split_knowledge_set(X, privileged_indexes, boolean):
@@ -88,7 +88,7 @@ if __name__ == "__main__":
     classes = len(ohe.categories_[0])
 
     n_samples, n_features = X.shape  # number of samples and number of features
-    x_train, x_test, y_train, y_test = train_test_split(X, Y, test_size=0.3)  # Split data into train and test
+    x_train, x_test, y_train, y_test = train_test_split(X, Y, test_size=PERCENTAGE_TEST)  # Split data into train and test
 
     p_indexes = split_indexes(n_features)
 
