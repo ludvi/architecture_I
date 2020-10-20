@@ -8,41 +8,40 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.metrics import accuracy_score
 from sklearn.metrics import precision_recall_fscore_support
-from tensorflow.keras import datasets, layers, models, optimizers
+from tensorflow.keras import layers, models, optimizers
 import matplotlib.pyplot as plt
-import argparse
 
 
 DATASET = 'COIL20.mat'
-PERCENTAGE_PRIVILEGED = 0.3
-PERCENTAGE_TRAIN = 0.2
-EPOCHS = 10
+PERCENTAGE_PRIVILEGED = 30
+PERCENTAGE_TEST = 0.3
+EPOCHS = 8
 
-def split_knowledge_set(X, privileged_indexes, boolean):
+def split_knowledge_set(X, privileged_indices, boolean):
     """
     Get the set of the desired knowledge, privileged or unprivileged
     :param X: dataset to split into privileged and unprivileged knowledge
-    :param privileged_indexes: indexes randomly chosen to become the privileged one
+    :param privileged_indices: indices randomly chosen to become the privileged one
     :param boolean: true => select privileged information
                     false => select unprivileged information
     :return: ndarray with desired information
     """
     if boolean:
-        return X[:, privileged_indexes[0]]
+        return X[:, privileged_indices[0]]
     else:
-        return X[:, privileged_indexes[1]]
+        return X[:, privileged_indices[1]]
 
-def split_indexes(n_features):
+def split_indices(n_features):
     """
-    Provide a list of two arrays, the first contains privileged indexes and the second the unprivileged ones.
+    Provide a list of two arrays, the first contains privileged indices and the second the unprivileged ones.
     The size of the two arrays is given by the PERCENTAGE of privileged knowledge.
     :param n_features: size of the array you want to split
-    :return: list [[privileged_indexes],[uprivileged_indexes]]
+    :return: list [[privileged_indices],[uprivileged_indices]]
     """
-    indexes = list(range(n_features))
-    random.shuffle(indexes)
+    indices = list(range(n_features))
+    random.shuffle(indices)
     split_index = int(float(PERCENTAGE_PRIVILEGED) / 100 * n_features)
-    return [indexes[:split_index], indexes[split_index:]]
+    return [indices[:split_index], indices[split_index:]]
 
 def multi_layer_perceptron(n_features, classes, finalAct):
     """
@@ -67,7 +66,7 @@ def multi_layer_perceptron(n_features, classes, finalAct):
 def mlp(inputs, classes, finalAct, output):
     """
     Dense multi layer perceptron with 4 layers (1 input, 2 hidden, 1 output)
-    :param n_features: size of the argument of the first layer
+    :param
     :return: multi layer perceptron
     """
     model = layers.Dense(units=256)(inputs)
@@ -86,6 +85,7 @@ def mlp(inputs, classes, finalAct, output):
 
 def build(n_features_m2m3, classes, finalAct='softmax'):
     """
+    Building
 
     :param n_features_m2m3: size of the argument for the first layer
     :param classes: size of the expected output
@@ -105,16 +105,16 @@ def build(n_features_m2m3, classes, finalAct='softmax'):
     #modelm2m3.summary()
     return modelm2m3
 
-def save_list_indexes(indexes):
+def save_list_indices(indices):
     """
-    It saves privileged and unprivileged indexes in two different files
-    :param indexes: list of indexes. In indexes[0] --> privileged indexes. In indexes[1] --> unprivileged indexes.
+    It saves privileged and unprivileged indices in two different files
+    :param indices: list of indices. In indices[0] --> privileged indices. In indices[1] --> unprivileged indices.
     """
-    file = open("privileged_indexes.txt", "w")
-    file.write(str(indexes[0]))
+    file = open("privileged_indices_1.txt", "w")
+    file.write(str(indices[0]))
     file.close()
-    file = open("unprivileged_indexes.txt", "w")
-    file.write(str(indexes[1]))
+    file = open("unprivileged_indices_1.txt", "w")
+    file.write(str(indices[1]))
     file.close()
 
 if __name__ == "__main__":
@@ -130,14 +130,16 @@ if __name__ == "__main__":
     classes = len(ohe.categories_[0])
 
     n_samples, n_features = X.shape  # number of samples and number of features
-    x_train, x_test, y_train, y_test = train_test_split(X, Y, test_size=0.3)  # Split data into train and test
+    x_train, x_test, y_train, y_test = train_test_split(X, Y, test_size=PERCENTAGE_TEST)  # Split data into train and test
 
-    p_indexes = split_indexes(n_features)
+    p_indices = split_indices(n_features)
 
-    save_list_indexes(p_indexes)
+    save_list_indices(p_indices)
 
-    x_unprivileged_train = split_knowledge_set(x_train, p_indexes, False)  # train set with unprivileged knowledge
-    x_unprivileged_test = split_knowledge_set(x_test, p_indexes, False)  # test set with unpriviliged knowledge
+    x_unprivileged_train = split_knowledge_set(x_train, p_indices, False)  # train set with unprivileged knowledge
+    x_unprivileged_test = split_knowledge_set(x_test, p_indices, False)  # test set with unpriviliged knowledge
+
+    y_test_array = np.argwhere(y_test != 0)[:, 1]  # to use during test for model 1, 2 and 3
 
     # convert numpy to tensors
     x_train = tf.convert_to_tensor(x_train)
@@ -147,7 +149,6 @@ if __name__ == "__main__":
     x_unprivileged_train = tf.convert_to_tensor(x_unprivileged_train)
     x_unprivileged_test = tf.convert_to_tensor(x_unprivileged_test)
 
-    y_test_array = np.argwhere(y_test != 0)[:, 1]  # to use during test for model 1, 2 and 3
 
 ####################################################################################################################
     print("\n######### TRAINING ########")
@@ -156,20 +157,24 @@ if __name__ == "__main__":
     adam = optimizers.Adam(lr=0.0001)
 
     # Compiling model 1
-    print("\n[INFO] Compiling model 1")
+    #print("\n[INFO] Compiling model 1")
     m1.compile(adam, loss='categorical_crossentropy', metrics=["accuracy"])
 
     # Training model 1
-    print("\n[INFO] Training model 1")
-    history1 = m1.fit(x_train, y_train, epochs=10, verbose=0)#, steps_per_epoch=500)
+    #print("\n[INFO] Training model 1")
+    history1 = m1.fit(x_train, y_train, epochs=10, verbose=0)
 
     # Saving the model to disk
-    print("\n[INFO] Serializing network...")
-    m1.save(os.getcwd()+'\\saved_models\\model_1', save_format="h5")
+    #print("\n[INFO] Serializing network...")
+    m1.save(os.getcwd()+'\\run_random_indices\\run1\\saved_models\\model_1', save_format="h5")
 
     # Distribution to use in m2 to let it learn from m1
     privileged_dist = m1.predict(x_train)
-
+    y_prediction = []
+    for i in privileged_dist:
+        y_prediction = np.append(y_prediction, int(np.argmax(i)))
+    y_prediction = y_prediction[:, None]
+    y_train_privileged = ohe.fit_transform(y_prediction)
 
 ########################################## MODEL 2 MODEL 3 ###########################################
 
@@ -177,7 +182,7 @@ if __name__ == "__main__":
     n_features_m2m3=(n_features - int(n_features * PERCENTAGE_PRIVILEGED / 100))
     model_2_3 = build(n_features_m2m3, classes=classes, finalAct='softmax')
 
-    # Define two dictionaries: one that specifies the loss method for
+    # Defining two dictionaries: one that specifies the loss method for
     # each output of the network along with a second dictionary that
     # specifies the weight per loss
     losses = {
@@ -186,29 +191,27 @@ if __name__ == "__main__":
     lossWeights = {"m2_output": 1.0, "m3_output": 1.0}
 
     # Initializing the optimizer and compiling the model
-    print("\n[INFO] Compiling model 2 and 3...")
+    #print("\n[INFO] Compiling model 2 and 3...")
     opt = optimizers.Adam(lr=0.0001)
     model_2_3.compile(optimizer=opt, loss=losses, loss_weights=lossWeights,
                   metrics=["accuracy"])
 
     # Training model 2 and 3
-    print("\n[INFO] Training model 2 and 3 ")
+    #print("\n[INFO] Training model 2 and 3 ")
     # train the network to perform multi-output classification
     H = model_2_3.fit(x=x_unprivileged_train,
-                  y={"m2_output": privileged_dist, "m3_output": y_train},
+                  y={"m2_output": y_train_privileged, "m3_output": y_train},
                   epochs=EPOCHS,
                   verbose=0)
 
     # Saving the model to disk
-    print("\n[INFO] Serializing network...")
-    model_2_3.save(os.getcwd()+'\\saved_models\\model_2_3', save_format="h5")
+    #print("\n[INFO] Serializing network...")
+    model_2_3.save(os.getcwd()+'\\run_random_indices\\run1\\saved_models\\model_2_3', save_format="h5")
 
-    print("\n[INFO] Printing training values for M1 M2 M3")
+    #print("\n[INFO] Printing training values for M1 M2 M3")
     # Print Train values Model 1
     ce_1 = history1.history['loss'][9]
     acc_1 = history1.history['accuracy'][9]
-    print('Train m1 loss = {0:.2f}'.format(ce_1))
-    print('Train m1 accuracy = {0:.2f}%'.format(acc_1 * 100.0))
 
     # Printing Train values Model 2 and 3
     total_loss = H.history['loss'][EPOCHS-1]
@@ -218,18 +221,21 @@ if __name__ == "__main__":
     m2_accuracy=H.history['m2_output_accuracy'][EPOCHS-1]
     m3_accuracy=H.history['m3_output_accuracy'][EPOCHS-1]
 
-    print('Train m2 loss = {0:.2f}'.format(m2_loss))
-    print('Train m2 accuracy = {0:.2f}%'.format(m2_accuracy * 100.0))
 
-    print('Train m3 loss = {0:.2f}'.format(m3_loss))
-    print('Train m3 accuracy = {0:.2f}%\n'.format(m3_accuracy * 100.0))
+
+    print('Train_m1_accuracy {0:.2f}%'.format(acc_1 * 100.0))
+    print('Train_m2_accuracy {0:.2f}%'.format(m2_accuracy * 100.0))
+    print('Train_m3_accuracy {0:.2f}%\n'.format(m3_accuracy * 100.0))
+
+    print('Train_m1_loss {0:.2f}'.format(ce_1))
+    print('Train_m2_loss {0:.2f}'.format(m2_loss))
+    print('Train_m3_loss {0:.2f}'.format(m3_loss))
+
 
     print("\n######### TESTING ########")
     # evaluation and prediction model 1
-    print("\nTEST MODEL 1")
+    #print("\nTEST MODEL 1")
     test_loss1, test_accuracy1 = m1.evaluate(x_test, y_test, verbose=0)
-    print('Test loss = {0:.2f}'.format(test_loss1))
-    print('Test accuracy = {0:.2f}%'.format(test_accuracy1 * 100.0))
     predictions1 = m1.predict(x_test)
 
     y_pred1 = []
@@ -237,36 +243,27 @@ if __name__ == "__main__":
         y_pred1 = np.append(y_pred1, int(np.argmax(i)))
     y_test1 = np.argwhere(y_test != 0)[:, 1]
     f1 = precision_recall_fscore_support(y_test1, y_pred1, average='macro')
-    print('precision, recall, fbeta_score, support' + str(f1))
+    #print('precision, recall, fbeta_score, support' + str(f1))
 
-    print("\nTEST MODEL 2 AND MODEL 3 --- UNPRIVILEGED SECTION")
+    #print("\nTEST MODEL 2 AND MODEL 3 --- UNPRIVILEGED SECTION")
     (total_output_loss, m2_output_loss_kld, m3_output_loss_ce, m2_output_accuracy, m3_output_accuracy) = model_2_3.evaluate(x_unprivileged_test, (y_test, y_test), verbose=0)
     (predictions2, predictions3) = model_2_3.predict(x_unprivileged_test)
 
-    print('Test total loss = {0:.2f}'.format(total_output_loss))
-
-    print("\nModel 2 values")
-    print('Test m2 loss = {0:.2f}'.format(m2_output_loss_kld))
-    print('Test m2 accuracy = {0:.2f}%'.format(m2_output_accuracy * 100.0))
-
+    #print("\nModel 2 values")
     y_pred2 = []
     for i in predictions2:
         y_pred2 = np.append(y_pred2, int(np.argmax(i)))
     y_test2 = np.argwhere(y_test != 0)[:, 1]
     f2 = precision_recall_fscore_support(y_test2, y_pred2, average='macro')
-    print('\nprecision, recall, fbeta_score, support' + str(f2))
+    #print('\nprecision, recall, fbeta_score, support' + str(f2))
 
-
-    print("\nModel 3 values")
-    print('Test m3 loss = {0:.2f}'.format(m3_output_loss_ce))
-    print('Test m3 accuracy = {0:.2f}%'.format(m3_output_accuracy * 100.0))
-
+    #print("\nModel 3 values")
     y_pred3 = []
     for i in predictions3:
         y_pred3 = np.append(y_pred3, int(np.argmax(i)))
     y_test3 = np.argwhere(y_test != 0)[:, 1]
     f3 = precision_recall_fscore_support(y_test3, y_pred3, average='macro')
-    print('precision, recall, fbeta_score, support' + str(f3))
+    #print('precision, recall, fbeta_score, support' + str(f3))
 
     # plot the total loss, m2 loss, and m3 loss
     lossNames = ["loss", "m2_output_loss", "m3_output_loss"]
@@ -283,7 +280,7 @@ if __name__ == "__main__":
         ax[i].legend()
     # save the losses figure
     plt.tight_layout()
-    plt.savefig(os.getcwd()+'\\saved_images\\loss'.format("png"))
+    plt.savefig(os.getcwd()+'\\run_random_indices\\run1\\saved_images\\loss'.format("png"))
     # plt.show()
     plt.close()
 
@@ -301,12 +298,12 @@ if __name__ == "__main__":
         ax[i].legend()
     # save the accuracies figure
     plt.tight_layout()
-    plt.savefig(os.getcwd()+'\\saved_images\\accuracy'.format("png"))
+    plt.savefig(os.getcwd()+'\\run_random_indices\\run1\\saved_images\\accuracy'.format("png"))
     # plt.show()
     plt.close()
 
 
-    print("\nFINAL")
+    #print("\nFINAL")
     # create a copy of m3 without last layer (activation function), just to get the features of the secondlast layer
     intermediate_layer_m2_m3 = tf.keras.Model(inputs=model_2_3.inputs, outputs=[model_2_3.get_layer("dense_7").output,
                                                                                 model_2_3.get_layer("dense_11").output],
@@ -322,7 +319,7 @@ if __name__ == "__main__":
     ce_final = tf.reduce_mean(tf.losses.categorical_crossentropy(y_train, y_train_fin)).numpy()
 
     # print final loss
-    print('Cross entropy final = {0:.2f}'.format(ce_final))
+    #print('Cross entropy final = {0:.2f}'.format(ce_final))
 
     features_2_3_test = intermediate_layer_m2_m3.predict(x_unprivileged_test)
     sum_features_test = (features_2_3_test[0] + features_2_3_test[1]) / 2
@@ -335,5 +332,40 @@ if __name__ == "__main__":
         y_pred_fin = np.append(y_pred_fin, int(np.argmax(i)))
     f_final = precision_recall_fscore_support(y_test_array, y_pred_fin, average='macro')
     test_accuracy_final = accuracy_score(y_test_array, y_pred_fin)
-    print('Test accuracy = {0:.2f}%'.format(test_accuracy_final * 100.0))
-    print('precision, recall, fbeta_score, support' + str(f_final))
+    #print('precision, recall, fbeta_score, support' + str(f_final))
+
+    str1 = str(f1)
+    str1 = str1[1:-1].split(',')
+    str2 = str(f2)
+    str2 = str2[1:-1].split(',')
+    str3 = str(f3)
+    str3 = str3[1:-1].split(',')
+    str_final = str(f_final)
+    str_final = str_final[1:-1].split(',')
+
+    print('Test_m1_accuracy {0:.2f}%'.format(test_accuracy1 * 100.0))
+    print('Test_m2_accuracy {0:.2f}%'.format(m2_output_accuracy * 100.0))
+    print('Test_m3_accuracy {0:.2f}%'.format(m3_output_accuracy * 100.0))
+    print('Test_accuracy {0:.2f}%\n'.format(test_accuracy_final * 100.0))
+
+    print('Test_m1_loss {0:.2f}'.format(test_loss1))
+    print('Test_m2_loss {0:.2f}'.format(m2_output_loss_kld))
+    print('Test_m3_loss {0:.2f}'.format(m3_output_loss_ce))
+    print('Test_total_loss {0:.2f}\n'.format(total_output_loss))
+
+    print('precision_m1 {0:.2f}'.format(float(str1[0])))
+    print('precision_m2 {0:.2f}'.format(float(str2[0])))
+    print('precision_m3 {0:.2f}'.format(float(str3[0])))
+    print('precision_final {0:.2f}\n'.format(float(str_final[0])))
+
+    print('recall_m1 {0:.2f}'.format(float(str1[1])))
+    print('recall_m2 {0:.2f}'.format(float(str2[1])))
+    print('recall_m3 {0:.2f}'.format(float(str3[1])))
+    print('recall_final {0:.2f}\n'.format(float(str_final[1])))
+
+    print('fbeta_score_m1 {0:.2f}'.format(float(str1[2])))
+    print('fbeta_score_m2 {0:.2f}'.format(float(str2[2])))
+    print('fbeta_score_m3 {0:.2f}'.format(float(str3[2])))
+    print('fbeta_score_final {0:.2f}\n'.format(float(str_final[2])))
+
+    print('Cross_entropy_final {0:.2f}'.format(ce_final))
