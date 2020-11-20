@@ -11,13 +11,14 @@ from sklearn.metrics import accuracy_score
 from sklearn.metrics import precision_recall_fscore_support
 from tensorflow.keras import layers, models, optimizers
 import matplotlib.pyplot as plt
+from numpy import genfromtxt
 
 
-DATASET = sys.argv[1]
-PERCENTAGE_PRIVILEGED = int(sys.argv[2])
-N = sys.argv[3] #run number N
-PERCENTAGE_TEST = 0.3
-EPOCHS = 10
+PERCENTAGE_PRIVILEGED = int(sys.argv[1])
+EPOCHS = int(sys.argv[2])
+PRIVILEGED_F = sys.argv[3]
+UNPRIVILEGED_F = sys.argv[4]
+
 
 def split_knowledge_set(X, privileged_indices, boolean):
     """
@@ -33,29 +34,6 @@ def split_knowledge_set(X, privileged_indices, boolean):
     else:
         return X[:, privileged_indices[1]]
 
-def split_indices(n_features):
-    """
-    Provide a list of two arrays, the first contains privileged indices and the second the unprivileged ones.
-    The size of the two arrays is given by the PERCENTAGE of privileged knowledge.
-    :param n_features: size of the array you want to split
-    :return: list [[privileged_indices],[uprivileged_indices]]
-    """
-    indices = list(range(n_features))
-    random.shuffle(indices)
-    split_index = int(float(PERCENTAGE_PRIVILEGED) / 100 * n_features)
-    return [indices[:split_index], indices[split_index:]]
-
-def save_list_indices(indices):
-    """
-    It saves privileged and unprivileged indices in two different files
-    :param indices: list of indices. In indices[0] --> privileged indices. In indices[1] --> unprivileged indices.
-    """
-    file = open("privileged_indices.txt", "w")
-    file.write(str(indices[0]))
-    file.close()
-    file = open("unprivileged_indices.txt", "w")
-    file.write(str(indices[1]))
-    file.close()
 
 def plot(subject, values_toPlot):
     """
@@ -118,43 +96,54 @@ def arch_final(n_features_m2m3, classes, finalAct):
     return model_fin
 
 if __name__ == "__main__":
-    mat = scipy.io.loadmat('..\\..\\..\\..\\data\\' + DATASET)
-
-    X = mat['X']  # data
-    y = mat['Y']  # label
+    X_train = genfromtxt("../../../X_train_0.csv", delimiter=' ')
+    X_val = genfromtxt("../../../X_val_0.csv", delimiter=' ')
+    X_test = genfromtxt("../../../X_test_0.csv", delimiter=' ')
+    y_train=genfromtxt("../../../y_train_0.csv", delimiter=' ', dtype=int).reshape(-1, 1)
+    y_val=genfromtxt("../../../y_val_0.csv", delimiter=' ', dtype=int).reshape(-1, 1)
+    y_test=genfromtxt("../../../y_test_0.csv", delimiter=' ', dtype=int).reshape(-1, 1)
 
     # one hot encoding
     ohe = OneHotEncoder(sparse=False)
-    Y = ohe.fit_transform(y)
-
+    Y = ohe.fit_transform(y_train)
     classes = len(ohe.categories_[0])
 
-    n_samples, n_features = X.shape  # number of samples and number of features
-    x_train, x_test, y_train, y_test = train_test_split(X, Y,
-                                                        test_size=PERCENTAGE_TEST)  # Split data into train and test
+    n_samples = X_train.shape[0]+X_val.shape[0]+X_test.shape[0]
+    n_features = X_train.shape[1]
 
-    p_indices = split_indices(n_features)
+    #necessary to run the model
+    y_train = ohe.fit_transform(y_train)
+    y_val = ohe.fit_transform(y_val)
+    y_test = ohe.fit_transform(y_test)
 
-    save_list_indices(p_indices)
+    unprivileged = np.genfromtxt(UNPRIVILEGED_F, delimiter=',', dtype=int)
+    privileged = np.genfromtxt(PRIVILEGED_F, delimiter=',', dtype=int)
+    p_indices = [privileged, unprivileged]
 
-    x_unprivileged_train = split_knowledge_set(x_train, p_indices, False)  # train set with unprivileged knowledge
-    x_unprivileged_test = split_knowledge_set(x_test, p_indices, False)  # test set with unpriviliged knowledge
+    x_unprivileged_train = split_knowledge_set(X_train, p_indices, False)  # train set with unprivileged knowledge
+    x_unprivileged_test = split_knowledge_set(X_test, p_indices, False)  # test set with unpriviliged knowledge
+    x_unprivileged_val = split_knowledge_set(X_val, p_indices, False)
 
     y_test_array = np.argwhere(y_test != 0)[:, 1]  # to use during test for model 1, 2 and 3
 
     # convert numpy to tensors
-    x_train = tf.convert_to_tensor(x_train)
+    x_train = tf.convert_to_tensor(X_train)
+    x_val = tf.convert_to_tensor(X_val)
+    x_test = tf.convert_to_tensor(X_test)
     y_train = tf.convert_to_tensor(y_train)
-    x_test = tf.convert_to_tensor(x_test)
+    y_val = tf.convert_to_tensor(y_val)
     y_test = tf.convert_to_tensor(y_test)
+
     x_unprivileged_train = tf.convert_to_tensor(x_unprivileged_train)
+    x_unprivileged_val = tf.convert_to_tensor(x_unprivileged_val)
     x_unprivileged_test = tf.convert_to_tensor(x_unprivileged_test)
 
     m1 = multi_layer_perceptron(n_features, classes, 'softmax')
     adam = optimizers.Adam(lr=0.0001)
 
-    m1.compile(adam, loss='categorical_crossentropy', metrics=["accuracy","mse"])
-    history1 = m1.fit(x_train, y_train, epochs=EPOCHS, validation_split=0.2, verbose=0)
+    m1.compile(adam, loss='categorical_crossentropy', metrics=["accuracy"])
+    history1 = m1.fit(x_train, y_train, epochs=EPOCHS, validation_data=(x_val, y_val), verbose=0)
+
     m1.save(os.getcwd() + '\\saved_models\\model_1', save_format="h5")
 
     privileged_dist = m1.predict(x_train)
@@ -163,14 +152,15 @@ if __name__ == "__main__":
         y_prediction = np.append(y_prediction, int(np.argmax(i)))
     y_prediction = y_prediction[:, None]
     y_train_privileged = ohe.fit_transform(y_prediction)
-    #y_train_privileged = tf.convert_to_tensor(y_train_privileged)
+    y_train_privileged = tf.convert_to_tensor(y_train_privileged)
 
     n_features_m2m3 = (n_features - int(n_features * PERCENTAGE_PRIVILEGED / 100))
-    architecture = arch_final(n_features_m2m3, classes, 'softmax')
+    architecture = arch_final(n_features_m2m3, classes,'softmax')
+    adam = optimizers.Adam(lr=0.0001)
     losses = {"m2_output": "kullback_leibler_divergence", "m3_output": "categorical_crossentropy", "m_total": "categorical_crossentropy"}
     lossWeights = {"m2_output": 1.0, "m3_output": 1.0, "m_total": 1.0}
-    architecture.compile(adam, loss=losses, loss_weights= lossWeights, metrics=["accuracy", "mse"])
-    H = architecture.fit(x=x_unprivileged_train, y={"m2_output": y_train_privileged, "m3_output": y_train, "m_total": y_train}, epochs=EPOCHS, validation_split=0.2, verbose=0)
+    architecture.compile(adam, loss=losses, loss_weights= lossWeights, metrics=["accuracy"])
+    H = architecture.fit(x=x_unprivileged_train, y={"m2_output": y_train_privileged, "m3_output": y_train, "m_total": y_train}, epochs=EPOCHS, validation_data=(x_unprivileged_val, y_val), verbose=0)
     architecture.save(os.getcwd() + '\\saved_models\\architecture', save_format="h5")
 
     m1_accuracy = history1.history['accuracy'][EPOCHS - 1]
@@ -184,11 +174,6 @@ if __name__ == "__main__":
     m_total_loss = H.history['m_total_loss'][EPOCHS-1]
     sum_loss = H.history['loss'][EPOCHS - 1]
 
-    m1_mse = history1.history['mse'][EPOCHS-1]
-    m2_mse = H.history['m2_output_mse'][EPOCHS-1]
-    m3_mse = H.history['m3_output_mse'][EPOCHS-1]
-    m_total_mse = H.history['m_total_mse'][EPOCHS-1]
-
     m1_val_accuracy = history1.history['val_accuracy'][EPOCHS - 1]
     m2_val_accuracy = H.history['val_m2_output_accuracy'][EPOCHS - 1]
     m3_val_accuracy = H.history['val_m3_output_accuracy'][EPOCHS - 1]
@@ -200,11 +185,6 @@ if __name__ == "__main__":
     m_total_val_loss = H.history['val_m_total_loss'][EPOCHS - 1]
     sum_val_loss = H.history['val_loss'][EPOCHS - 1]
 
-    m1_val_mse = history1.history['val_mse'][EPOCHS - 1]
-    m2_val_mse = H.history['val_m2_output_mse'][EPOCHS - 1]
-    m3_val_mse = H.history['val_m3_output_mse'][EPOCHS - 1]
-    m_total_val_mse = H.history['val_m_total_mse'][EPOCHS - 1]
-
     print('{0:.2f}'.format(m1_accuracy * 100.0), end=" ")
     print('{0:.2f}'.format(m2_accuracy * 100.0), end=" ")
     print('{0:.2f}'.format(m3_accuracy * 100.0), end=" ")
@@ -214,10 +194,6 @@ if __name__ == "__main__":
     print('{0:.2f}'.format(m3_loss), end=" ")
     print('{0:.2f}'.format(m_total_loss), end=" ")
     print('{0:.2f}'.format(sum_loss), end=" ")
-    print('{0:.4f}'.format(m1_mse), end=" ")
-    print('{0:.4f}'.format(m2_mse), end=" ")
-    print('{0:.4f}'.format(m3_mse), end=" ")
-    print('{0:.4f}'.format(m_total_mse), end=" ")
     print('{0:.2f}'.format(m1_val_accuracy * 100.0), end=" ")
     print('{0:.2f}'.format(m2_val_accuracy * 100.0), end=" ")
     print('{0:.2f}'.format(m3_val_accuracy * 100.0), end=" ")
@@ -227,13 +203,8 @@ if __name__ == "__main__":
     print('{0:.2f}'.format(m3_val_loss), end=" ")
     print('{0:.2f}'.format(m_total_val_loss), end=" ")
     print('{0:.2f}'.format(sum_val_loss), end=" ")
-    print('{0:.4f}'.format(m1_val_mse), end=" ")
-    print('{0:.4f}'.format(m2_val_mse), end=" ")
-    print('{0:.4f}'.format(m3_val_mse), end=" ")
-    print('{0:.4f}'.format(m_total_val_mse), end=" ")
 
-
-    m1_loss_test, m1_accuracy_test, m1_mse_test = m1.evaluate(x_test, y_test, verbose=0)
+    m1_loss_test, m1_accuracy_test = m1.evaluate(x_test, y_test, verbose=0)
     predictions1 = m1.predict(x_test)
 
     y_pred1 = []
@@ -241,8 +212,7 @@ if __name__ == "__main__":
         y_pred1 = np.append(y_pred1, int(np.argmax(i)))
     f1 = precision_recall_fscore_support(y_test_array, y_pred1, average='macro')
 
-    (total_loss_test, m2_loss_kld_test, m3_loss_ce_test, m_total_loss_ce_fin_test, m2_accuracy_test,
-    m2_mse_test, m3_accuracy_test, m3_mse_test, m_accuracy_test, m_total_mse_test) = architecture.evaluate(x_unprivileged_test, y_test, verbose=0)
+    (total_loss_test, m2_loss_kld_test, m3_loss_ce_test, m_total_loss_ce_fin_test, m2_accuracy_test, m3_accuracy_test, m_accuracy_test) = architecture.evaluate(x_unprivileged_test, y_test, verbose=0)
     (predictions2, predictions3, predictions_total)= architecture.predict(x_unprivileged_test)
 
     y_pred2 = []
@@ -261,18 +231,11 @@ if __name__ == "__main__":
     f_final = precision_recall_fscore_support(y_test_array, y_pred_fin, average='macro')
     test_accuracy_final = accuracy_score(y_test_array, y_pred_fin)
 
-    #print(set(y_test_array) - set(y_pred1))
-    #print(set(y_test_array) - set(y_pred2))
-    #print(set(y_test_array) - set(y_pred3))
-    #print(set(y_test_array) - set(y_pred_fin))
-
     plot("Loss", ["loss", "m2_output_loss", "m3_output_loss", "m_total_loss"])
     plot("Accuracy", ["m2_output_accuracy", "m3_output_accuracy", "m_total_accuracy"])
-    plot("MSE", ["m2_output_mse", "m3_output_mse", "m_total_mse"])
     plot("Val_Loss", ["val_loss", "val_m2_output_loss", "val_m3_output_loss", "val_m_total_loss"])
     plot("Val_Accuracy", ["val_m2_output_accuracy", "val_m3_output_accuracy", "val_m_total_accuracy"])
-    plot("Val_MSE", ["val_m2_output_mse", "val_m3_output_mse", "val_m_total_mse"])
-
+    
     str1 = str(f1)
     str1 = str1[1:-1].split(',')
     str2 = str(f2)
@@ -291,10 +254,6 @@ if __name__ == "__main__":
     print('{0:.2f}'.format(m3_loss_ce_test), end=" ")
     print('{0:.2f}'.format(m_total_loss_ce_fin_test), end=" ")
     print('{0:.2f}'.format(total_loss_test), end=" ")
-    print('{0:.4f}'.format(m1_mse_test), end=" ")
-    print('{0:.4f}'.format(m2_mse_test), end=" ")
-    print('{0:.4f}'.format(m3_mse_test), end=" ")
-    print('{0:.4f}'.format(m_total_mse_test), end=" ")
     print('{0:.2f}'.format(float(str1[0])), end=" ")
     print('{0:.2f}'.format(float(str2[0])), end=" ")
     print('{0:.2f}'.format(float(str3[0])), end=" ")
